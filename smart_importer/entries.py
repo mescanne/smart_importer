@@ -6,7 +6,7 @@ from beancount.core.data import Posting, Transaction
 
 
 def update_postings(
-    transaction: Transaction, accounts: list[str]
+    transaction: Transaction, accounts: list[str], anchor_accounts: list[str]
 ) -> Transaction:
     """Update the list of postings of a transaction to match the accounts.
 
@@ -22,6 +22,13 @@ def update_postings(
 
     posting = transaction.postings[0]
 
+    # If one of the accounts is an anchor account, then substitute it
+    for i, acc in enumerate(accounts):
+        if acc not in anchor_accounts:
+            continue
+        accounts[i] = posting.account
+
+    # Normal logic
     new_postings = [
         Posting(account, None, None, None, None, None) for account in accounts
     ]

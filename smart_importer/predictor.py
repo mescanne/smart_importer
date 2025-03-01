@@ -18,6 +18,8 @@ from beancount.core.data import (
 from beancount.core.data import sorted as beancount_sorted
 from sklearn.pipeline import FeatureUnion, make_pipeline
 from sklearn.svm import SVC
+from sklearnex import patch_sklearn, config_context
+patch_sklearn()
 
 from smart_importer.entries import (
     merge_non_transaction_entries,
@@ -58,6 +60,7 @@ class EntryPredictor(ImporterHook):
         overwrite: bool = False,
         string_tokenizer: Callable[[str], list] | None = None,
         denylist_accounts: list[str] | None = None,
+        anchor_accounts: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.training_data = None
@@ -67,6 +70,7 @@ class EntryPredictor(ImporterHook):
         self.is_fitted = False
         self.lock = threading.Lock()
         self.account: str | None = None
+        self.anchor_accounts = anchor_accounts or []
 
         self.predict = predict
         self.overwrite = overwrite
@@ -121,16 +125,16 @@ class EntryPredictor(ImporterHook):
         if not self.training_data:
             if len(all_transactions) > 0:
                 logger.warning(
-                    "Cannot train the machine learning model"
-                    "None of the training data matches the accounts"
+                    "Cannot train the machine learning model; "
+                    "none of the training data matches the accounts"
                 )
             else:
                 logger.warning(
-                    "Cannot train the machine learning model"
-                    "No training data found"
+                    "Cannot train the machine learning model; "
+                    "no training data found"
                 )
         else:
-            logger.debug(
+            logger.info(
                 "Loaded training data with %d transactions for account %s, "
                 "filtered from %d total transactions",
                 len(self.training_data),
@@ -148,7 +152,10 @@ class EntryPredictor(ImporterHook):
                 return False
             if self.account == pos.account:
                 found_import_account = True
-        return found_import_account or not self.account
+            if pos.account in self.anchor_accounts:
+                found_import_account = True
+
+        return found_import_account or (not self.account and not self.anchor_accounts)
 
     @property
     def targets(self):
@@ -195,9 +202,11 @@ class EntryPredictor(ImporterHook):
             logger.debug("Only one target possible.")
         else:
             assert self.pipeline is not None
-            self.pipeline.fit(self.training_data, self.targets)
+            with config_context(target_offload="auto"):
+                logger.info("Training the model.")
+                self.pipeline.fit(self.training_data, self.targets)
             self.is_fitted = True
-            logger.debug("Trained the machine learning model.")
+            logger.info("Trained the machine learning model.")
 
     def process_entries(
         self, imported_entries: data.Directives

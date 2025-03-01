@@ -25,4 +25,4 @@ class PredictPostings(EntryPredictor):
         ]
 
     def apply_prediction(self, entry, prediction):
-        return update_postings(entry, prediction.split(" "))
+        return update_postings(entry, prediction.split(" "), self.anchor_accounts)
