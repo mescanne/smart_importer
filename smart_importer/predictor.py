@@ -18,8 +18,13 @@ from beancount.core.data import (
 from beancount.core.data import sorted as beancount_sorted
 from sklearn.pipeline import FeatureUnion, make_pipeline
 from sklearn.svm import SVC
-from sklearnex import patch_sklearn, config_context
-patch_sklearn()
+
+# Patch sk learn if dependency is installed
+try:
+    from sklearnex import patch_sklearn
+    patch_sklearn()
+except ImportError:
+    pass
 
 from smart_importer.entries import (
     merge_non_transaction_entries,
@@ -202,9 +207,7 @@ class EntryPredictor(ImporterHook):
             logger.debug("Only one target possible.")
         else:
             assert self.pipeline is not None
-            with config_context(target_offload="auto"):
-                logger.info("Training the model.")
-                self.pipeline.fit(self.training_data, self.targets)
+            self.pipeline.fit(self.training_data, self.targets)
             self.is_fitted = True
             logger.info("Trained the machine learning model.")
 
